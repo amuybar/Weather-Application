@@ -2,125 +2,114 @@
 
 namespace App\Http\Controllers;
 
+// WeatherController handles fetching and formatting weather data from OpenWeatherMap API.
+
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Cache;
 
 class WeatherController extends Controller
 {
+    // Holds the OpenWeatherMap API key
     private $apiKey;
 
-public function __construct()
-{
-    $this->apiKey = env('OPENWEATHERMAP_API_KEY');
-}
-    // public function getWeather(Request $request)
-    // {
-    //     $city = $request->query('city', 'Nairobi');
-        
-    //     // Cache key based on city name
-    //     $cacheKey = 'weather_' . strtolower($city);
-        
-    //     // Check if we have cached data (cache for 30 minutes)
-    //     if (Cache::has($cacheKey)) {
-    //         return Cache::get($cacheKey);
-    //     }
-        
-    //     try {
-    //         // Get current weather
-    //         $currentWeatherResponse = Http::get("https://api.openweathermap.org/data/2.5/weather", [
-    //             'q' => $city,
-    //             'appid' => $this->apiKey,
-    //             'units' => 'metric',
-    //         ]);
-            
-    //         if ($currentWeatherResponse->failed()) {
-    //             return response()->json([
-    //                 'error' => 'Failed to fetch weather data',
-    //             ], 500);
-    //         }
-            
-    //         $currentWeather = $currentWeatherResponse->json();
-            
-    //         // Get forecast for next 3 days
-    //         $forecastResponse = Http::get("https://api.openweathermap.org/data/2.5/forecast", [
-    //             'q' => $city,
-    //             'appid' => $this->apiKey,
-    //             'units' => 'metric',
-    //         ]);
-            
-    //         if ($forecastResponse->failed()) {
-    //             return response()->json([
-    //                 'error' => 'Failed to fetch forecast data',
-    //             ], 500);
-    //         }
-            
-    //         $forecast = $forecastResponse->json();
-            
-    //         // Format the response data to match our frontend requirements
-    //         $result = $this->formatWeatherData($currentWeather, $forecast);
-            
-    //         // Cache the result for 30 minutes
-    //         Cache::put($cacheKey, $result, 1800);
-            
-    //         return $result;
-    //     } catch (\Exception $e) {
-    //         return response()->json([
-    //             'error' => 'An error occurred while fetching weather data',
-    //             'message' => $e->getMessage()
-    //         ], 500);
-    //     }
-    // }
+    /**
+     * WeatherController constructor.
+     * Loads the OpenWeatherMap API key from environment variables.
+     */
+    public function __construct()
+    {
+        $this->apiKey = env('OPENWEATHERMAP_API_KEY');
+    }
+
+    /**
+     * Fetches current weather and 3-day forecast for a given city.
+     * Uses caching to reduce API calls.
+     *
+     * @param Request $request
+     * @return \Illuminate\Http\JsonResponse|array
+     */
     public function getWeather(Request $request)
-{
-    $city = $request->query('city', 'Nairobi');
+    {
+        // Get city from query, default to Nairobi
+        $city = $request->query('city', 'Nairobi');
+        
+        // Cache key based on city name
+        $cacheKey = 'weather_' . strtolower($city);
+        
+        // Return cached data if available (cache for 30 minutes)
+        if (Cache::has($cacheKey)) {
+            return Cache::get($cacheKey);
+        }
+        
+        try {
+            // Fetch current weather data from OpenWeatherMap
+            $currentWeatherResponse = Http::get("https://api.openweathermap.org/data/2.5/weather", [
+                'q' => $city,
+                'appid' => $this->apiKey,
+                'units' => 'metric',
+            ]);
+            
+            if ($currentWeatherResponse->failed()) {
+                return response()->json([
+                    'error' => 'Failed to fetch weather data',
+                ], 500);
+            }
+            
+            $currentWeather = $currentWeatherResponse->json();
+            
+            // Fetch 5-day/3-hour forecast data from OpenWeatherMap
+            $forecastResponse = Http::get("https://api.openweathermap.org/data/2.5/forecast", [
+                'q' => $city,
+                'appid' => $this->apiKey,
+                'units' => 'metric',
+            ]);
+            
+            if ($forecastResponse->failed()) {
+                return response()->json([
+                    'error' => 'Failed to fetch forecast data',
+                ], 500);
+            }
+            
+            $forecast = $forecastResponse->json();
+            
+            // Format the response data for frontend
+            $result = $this->formatWeatherData($currentWeather, $forecast);
+            
+            // Cache the result for 30 minutes
+            Cache::put($cacheKey, $result, 1800);
+            
+            return $result;
+        } catch (\Exception $e) {
+            // Handle unexpected errors
+            return response()->json([
+                'error' => 'An error occurred while fetching weather data',
+                'message' => $e->getMessage()
+            ], 500);
+        }
+    }
     
-    // For demo purposes, just return mock data
-    return [
-        'city' => $city,
-        'temperature' => 13,
-        'weatherDescription' => 'Sunny',
-        'weatherIcon' => 'sunny',
-        'forecast' => [
-            [
-                'day' => '21 May',
-                'temperature' => 15,
-                'weatherIcon' => 'sunny'
-            ],
-            [
-                'day' => '22 May',
-                'temperature' => 20,
-                'weatherIcon' => 'cloudy'
-            ],
-            [
-                'day' => '23 May',
-                'temperature' => 18,
-                'weatherIcon' => 'sunny'
-            ]
-        ],
-        'wind' => [
-            'speed' => 3,
-            'direction' => 'NW'
-        ],
-        'humidity' => 80,
-        'date' => '20th May 2027',
-        'location' => $city . ', Kenya'
-    ];
-}
+    /**
+     * Formats the weather and forecast data for frontend consumption.
+     *
+     * @param array $currentWeather
+     * @param array $forecast
+     * @return array
+     */
     private function formatWeatherData($currentWeather, $forecast)
     {
-        // Extract current date
+        // Get current date in readable format
         $date = now()->format('jS M Y');
         
-        // Format the forecast data for 3 days
+        // Prepare forecast data for the next 3 days
         $forecastData = [];
         $processedDates = [];
         
-        // We need daily forecasts, not the 3-hour ones that the API returns
+        // The API returns 3-hour interval data; we pick one per day
         foreach ($forecast['list'] as $item) {
             $forecastDate = date('Y-m-d', $item['dt']);
             
-            // Skip if we already have this date or if it's today
+            // Skip if already processed or if it's today
             if (in_array($forecastDate, $processedDates) || $forecastDate === date('Y-m-d')) {
                 continue;
             }
@@ -133,12 +122,13 @@ public function __construct()
                 'weatherIcon' => $this->mapWeatherIcon($item['weather'][0]['icon']),
             ];
             
-            // Stop once we have 3 days
+            // Stop after 3 days
             if (count($forecastData) >= 3) {
                 break;
             }
         }
         
+        // Return formatted weather data
         return [
             'city' => $currentWeather['name'],
             'temperature' => round($currentWeather['main']['temp']),
@@ -155,6 +145,12 @@ public function __construct()
         ];
     }
     
+    /**
+     * Maps OpenWeatherMap icon codes to frontend icon codes.
+     *
+     * @param string $iconCode
+     * @return string
+     */
     private function mapWeatherIcon($iconCode)
     {
         // Map OpenWeatherMap icon codes to our frontend icon codes
@@ -179,9 +175,16 @@ public function __construct()
             '50n' => 'foggy',
         ];
         
-        return $iconMapping[$iconCode] ?? 'cloudy'; // Default to cloudy if not found
+        // Default to 'cloudy' if icon code not found
+        return $iconMapping[$iconCode] ?? 'cloudy';
     }
     
+    /**
+     * Converts wind degree to compass direction.
+     *
+     * @param int|float $degrees
+     * @return string
+     */
     private function getWindDirection($degrees)
     {
         $directions = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW', 'N'];
