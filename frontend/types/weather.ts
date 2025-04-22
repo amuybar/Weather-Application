@@ -1,21 +1,23 @@
-// types/weather.ts
+
+export interface ForecastDay {
+  day: string;
+  temperature: number;
+  weatherIcon: string;
+}
+
+export interface Wind {
+  speed: number;
+  direction: string;
+}
+
 export interface WeatherData {
-    city: string;
-    temperature: number;
-    weatherDescription: string;
-    weatherIcon: string;
-    forecast: Forecast[];
-    wind: {
-      speed: number;
-      direction: string;
-    };
-    humidity: number;
-    date: string;
-    location: string;
-  }
-  
-  export interface Forecast {
-    day: string;
-    temperature: number;
-    weatherIcon: string;
-  }
+  city: string;
+  temperature: number;
+  weatherDescription: string;
+  weatherIcon: string;
+  forecast: ForecastDay[];
+  wind: Wind;
+  humidity: number;
+  date: string;
+  location: string;
+}
